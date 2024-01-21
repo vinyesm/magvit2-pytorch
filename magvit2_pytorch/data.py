@@ -180,6 +180,10 @@ def video_to_tensor(
 
         frames.append(rearrange(frame, '... -> 1 ...'))
 
+    #TODO: trainer should skip empty videos instead of fail
+    print(f"MARINA {len(frames)} path {path} ")
+    if len(frames) == 0:
+        return None
     frames = np.array(np.concatenate(frames[:-1], axis = 0))  # convert list of frames to numpy array
     frames = rearrange(frames, 'f h w c -> c f h w')
 
@@ -276,6 +280,10 @@ class VideoDataset(Dataset):
             tensor = self.gif_to_tensor(path_str)
         elif ext == '.mp4':
             tensor = self.mp4_to_tensor(path_str)
+            # hack to skip empty videos
+            if tensor is None:
+                print("MARINA tensor is None, skipping to next")
+                return self.__getitem__((index+1) % len( self.paths))
             frames = tensor.unbind(dim = 1)
             tensor = torch.stack([*map(self.transform, frames)], dim = 1)
         else:
@@ -289,10 +297,14 @@ def collate_tensors_and_strings(data):
     if is_bearable(data, List[Tensor]):
         return (torch.stack(data),)
 
+    print(f"MARINA len(data) {len(data)}")
     data = zip(*data)
     output = []
 
     for datum in data:
+        print(datum)
+        if datum is None:
+            return Tuple()
         if is_bearable(datum, Tuple[Tensor, ...]):
             datum = torch.stack(datum)
         elif is_bearable(datum, Tuple[str, ...]):
