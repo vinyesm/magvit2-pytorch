@@ -58,7 +58,7 @@ def cycle(dl):
 
 @auto_unwrap_model()
 class VideoTokenizerTrainer:
-    @beartype
+    # @beartype
     def __init__(
         self,
         model: VideoTokenizer,
@@ -69,6 +69,7 @@ class VideoTokenizerTrainer:
         grad_accum_every: int = 1,
         apply_gradient_penalty_every: int = 4,
         max_grad_norm: Optional[float] = None,
+        train_dataloader: Optional[DataLoader] = None,
         dataset: Optional[Dataset] = None,
         dataset_folder: Optional[str] = None,
         dataset_type: VideosOrImagesLiteral = 'videos',
@@ -116,37 +117,39 @@ class VideoTokenizerTrainer:
 
         # dataset
 
-        if not exists(dataset):
-            if dataset_type == 'videos':
-                dataset_klass = VideoDataset
-                dataset_kwargs = {**dataset_kwargs, 'num_frames': num_frames}
-            else:
-                dataset_klass = ImageDataset
+        # if not exists(dataset):
+        #     if dataset_type == 'videos':
+        #         dataset_klass = VideoDataset
+        #         dataset_kwargs = {**dataset_kwargs, 'num_frames': num_frames}
+        #     else:
+        #         dataset_klass = ImageDataset
 
-            assert exists(dataset_folder)
-            dataset = dataset_klass(dataset_folder, image_size = model.image_size, **dataset_kwargs)
+        #     assert exists(dataset_folder)
+        #     dataset = dataset_klass(dataset_folder, image_size = model.image_size, **dataset_kwargs)
 
         # splitting dataset for validation
 
-        assert 0 <= valid_frac < 1.
+        # assert 0 <= valid_frac < 1.
 
-        if valid_frac > 0:
-            train_size = int((1 - valid_frac) * len(dataset))
-            valid_size = len(dataset) - train_size
-            dataset, valid_dataset = random_split(dataset, [train_size, valid_size], generator = torch.Generator().manual_seed(random_split_seed))
+        # if valid_frac > 0:
+        #     train_size = int((1 - valid_frac) * len(dataset))
+        #     valid_size = len(dataset) - train_size
+        #     dataset, valid_dataset = random_split(dataset, [train_size, valid_size], generator = torch.Generator().manual_seed(random_split_seed))
 
-            self.print(f'training with dataset of {len(dataset)} samples and validating with randomly splitted {len(valid_dataset)} samples')
-        else:
-            valid_dataset = dataset
-            self.print(f'training with shared training and valid dataset of {len(dataset)} samples')
+        #     self.print(f'training with dataset of {len(dataset)} samples and validating with randomly splitted {len(valid_dataset)} samples')
+        # else:
+        #     valid_dataset = dataset
+        #     self.print(f'training with shared training and valid dataset of {len(dataset)} samples')
 
         # dataset and dataloader
 
-        self.dataset = dataset
-        self.dataloader = DataLoader(dataset, shuffle = True, drop_last = True, batch_size = batch_size)
+        # self.dataset = dataset
+        # self.dataloader = DataLoader(dataset, shuffle = True, drop_last = True, batch_size = batch_size)
 
-        self.valid_dataset = valid_dataset
-        self.valid_dataloader = DataLoader(valid_dataset, shuffle = True, drop_last = True, batch_size = batch_size)
+        # self.valid_dataset = valid_dataset
+        # self.valid_dataloader = DataLoader(valid_dataset, shuffle = True, drop_last = True, batch_size = batch_size)
+
+        self.dataloader = train_dataloader
 
         self.validate_every_step = validate_every_step
         self.checkpoint_every_step = checkpoint_every_step
@@ -343,6 +346,8 @@ class VideoTokenizerTrainer:
 
             data, *_ = next(dl_iter)
 
+            data = data.to(self.device)
+
             with self.accelerator.autocast(), context():
                 loss, loss_breakdown = self.model(
                     data,
@@ -402,6 +407,8 @@ class VideoTokenizerTrainer:
             context = partial(self.accelerator.no_sync, self.model) if not is_last else nullcontext
 
             data, *_ = next(dl_iter)
+
+            data = data.to(self.device)
 
             with self.accelerator.autocast(), context():
                 discr_loss, discr_loss_breakdown = self.model(
@@ -505,7 +512,7 @@ class VideoTokenizerTrainer:
         step = self.step
 
         dl_iter = cycle(self.dataloader)
-        valid_dl_iter = cycle(self.valid_dataloader)
+        # valid_dl_iter = cycle(self.valid_dataloader)
 
         while step < self.num_train_steps:
             self.print(f'step {step}')
@@ -514,8 +521,8 @@ class VideoTokenizerTrainer:
 
             self.wait()
 
-            if self.is_main and not (step % self.validate_every_step):
-                self.valid_step(valid_dl_iter)
+            # if self.is_main and not (step % self.validate_every_step):
+            #     self.valid_step(valid_dl_iter)
 
             self.wait()
 
