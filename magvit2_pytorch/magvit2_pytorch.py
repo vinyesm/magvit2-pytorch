@@ -917,6 +917,7 @@ class CausalConv3d(Module):
         stride = (stride, 1, 1)
         dilation = (dilation, 1, 1)
         self.conv = nn.Conv3d(chan_in, chan_out, kernel_size, stride = stride, dilation = dilation, **kwargs)
+        nn.init.xavier_uniform_(self.conv.weight)
 
     def forward(self, x):
         pad_mode = self.pad_mode if self.time_pad < x.shape[2] else 'constant'
@@ -1102,13 +1103,14 @@ class VideoTokenizer(Module):
         # initial encoder
 
         self.conv_in = CausalConv3d(channels, init_dim, input_conv_kernel_size, pad_mode = pad_mode)
+        self.conv_in = nn.Identity()
 
         # whether to encode the first frame separately or not
 
         self.conv_in_first_frame = nn.Identity()
         self.conv_out_first_frame = nn.Identity()
 
-        if separate_first_frame_encoding:
+        if False and separate_first_frame_encoding:
             self.conv_in_first_frame = SameConv2d(channels, init_dim, input_conv_kernel_size[-2:])
             self.conv_out_first_frame = SameConv2d(init_dim, channels, output_conv_kernel_size[-2:])
 
@@ -1120,6 +1122,9 @@ class VideoTokenizer(Module):
         self.decoder_layers = ModuleList([])
 
         self.conv_out = CausalConv3d(init_dim, channels, output_conv_kernel_size, pad_mode = pad_mode)
+        self.conv_out = nn.Linear(32, 32)
+        nn.init.xavier_uniform_(self.conv_out.weight)
+        # self.conv_out.weight.data.copy_(torch.eye(32))
 
         dim = init_dim
         dim_out = dim
@@ -1333,6 +1338,7 @@ class VideoTokenizer(Module):
         self.encoder_cond_in = nn.Identity()
         self.decoder_cond_in = nn.Identity()
 
+        has_cond = False
         if has_cond:
             self.dim_cond = dim_cond
 
@@ -1695,14 +1701,17 @@ class VideoTokenizer(Module):
             aux_losses = self.zero
             quantizer_loss_breakdown = None
         else:
-            (quantized, codes, aux_losses), quantizer_loss_breakdown = self.quantizers(x, return_loss_breakdown = True)
+            aux_losses = self.zero
+            quantizer_loss_breakdown = None
+            pass
+            # (quantized, codes, aux_losses), quantizer_loss_breakdown = self.quantizers(x, return_loss_breakdown = True)
 
         if return_codes and not return_recon:
             return codes
 
         # decoder
 
-        recon_video = self.decode(quantized, cond = cond, video_contains_first_frame = video_contains_first_frame)
+        recon_video = self.decode(x, cond = cond, video_contains_first_frame = video_contains_first_frame)
 
         if return_codes:
             return codes, recon_video
@@ -1804,7 +1813,7 @@ class VideoTokenizer(Module):
         # get gradient with respect to perceptual loss for last decoder layer
         # needed for adaptive weighting
 
-        last_dec_layer = self.conv_out.conv.weight
+        last_dec_layer = self.conv_out.weight
 
         norm_grad_wrt_perceptual_loss = None
 

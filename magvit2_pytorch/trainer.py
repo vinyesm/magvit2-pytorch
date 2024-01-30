@@ -70,6 +70,7 @@ class VideoTokenizerTrainer:
         apply_gradient_penalty_every: int = 4,
         max_grad_norm: Optional[float] = None,
         train_dataloader: Optional[DataLoader] = None,
+        valid_dataloader: Optional[DataLoader] = None,
         dataset: Optional[Dataset] = None,
         dataset_folder: Optional[str] = None,
         dataset_type: VideosOrImagesLiteral = 'videos',
@@ -81,7 +82,7 @@ class VideoTokenizerTrainer:
         checkpoint_every_step = 100,
         num_frames = 17,
         use_wandb_tracking = False,
-        discr_start_after_step = 0.,
+        discr_start_after_step = 100.,
         warmup_steps = 1000,
         scheduler: Optional[Type[LRScheduler]] = None,
         scheduler_kwargs: dict = dict(),
@@ -150,6 +151,7 @@ class VideoTokenizerTrainer:
         # self.valid_dataloader = DataLoader(valid_dataset, shuffle = True, drop_last = True, batch_size = batch_size)
 
         self.dataloader = train_dataloader
+        self.valid_dataloader = valid_dataloader
 
         self.validate_every_step = validate_every_step
         self.checkpoint_every_step = checkpoint_every_step
@@ -512,7 +514,7 @@ class VideoTokenizerTrainer:
         step = self.step
 
         dl_iter = cycle(self.dataloader)
-        # valid_dl_iter = cycle(self.valid_dataloader)
+        valid_dl_iter = cycle(self.valid_dataloader)
 
         while step < self.num_train_steps:
             self.print(f'step {step}')
@@ -521,8 +523,8 @@ class VideoTokenizerTrainer:
 
             self.wait()
 
-            # if self.is_main and not (step % self.validate_every_step):
-            #     self.valid_step(valid_dl_iter)
+            if self.is_main and not (step % self.validate_every_step):
+                self.valid_step(valid_dl_iter)
 
             self.wait()
 
