@@ -1102,8 +1102,11 @@ class VideoTokenizer(Module):
 
         # initial encoder
 
-        self.conv_in = CausalConv3d(channels, init_dim, input_conv_kernel_size, pad_mode = pad_mode)
-        self.conv_in = nn.Identity()
+        # self.conv_in = CausalConv3d(channels, init_dim, input_conv_kernel_size, pad_mode = pad_mode)
+        # self.conv_in = nn.Identity()
+        self.conv_in = nn.Linear(32, 32)
+        nn.init.xavier_uniform_(self.conv_in.weight)
+        # self.conv_in.weight.data.copy_(torch.eye(32))
 
         # whether to encode the first frame separately or not
 
@@ -1121,9 +1124,10 @@ class VideoTokenizer(Module):
         self.encoder_layers = ModuleList([])
         self.decoder_layers = ModuleList([])
 
-        self.conv_out = CausalConv3d(init_dim, channels, output_conv_kernel_size, pad_mode = pad_mode)
-        self.conv_out = nn.Linear(32, 32)
-        nn.init.xavier_uniform_(self.conv_out.weight)
+        # self.conv_out = CausalConv3d(init_dim, channels, output_conv_kernel_size, pad_mode = pad_mode)
+        self.conv_out = nn.Identity()
+        # self.conv_out = nn.Linear(32, 32)
+        # nn.init.xavier_uniform_(self.conv_out.weight)
         # self.conv_out.weight.data.copy_(torch.eye(32))
 
         dim = init_dim
@@ -1530,49 +1534,56 @@ class VideoTokenizer(Module):
 
         # whether to pad video or not
 
-        if video_contains_first_frame:
-            video_len = video.shape[2]
+        print(f"MARINA video_contains_first_frame {video_contains_first_frame}")
+        print(f"MARINA encode_first_frame_separately {encode_first_frame_separately}")
 
-            video = pad_at_dim(video, (self.time_padding, 0), value = 0., dim = 2)
-            video_packed_shape = [torch.Size([self.time_padding]), torch.Size([]), torch.Size([video_len - 1])]
+        # if video_contains_first_frame:
+        #     video_len = video.shape[2]
+        #     print(f"MARINA video_len {video_len}")
+        #     print(f"MARINA video.shape 1 {video.shape}")
+        #     video = pad_at_dim(video, (self.time_padding, 0), value = 0., dim = 2)
+        #     print(f"MARINA video.shape 2 {video.shape}")
+        #     video_packed_shape = [torch.Size([self.time_padding]), torch.Size([]), torch.Size([video_len - 1])]
+        #     print(f"MARINA video_packed_shape {video_packed_shape}")
 
         # conditioning, if needed
 
-        assert (not self.has_cond) or exists(cond), '`cond` must be passed into tokenizer forward method since conditionable layers were specified'
+        # assert (not self.has_cond) or exists(cond), '`cond` must be passed into tokenizer forward method since conditionable layers were specified'
 
-        if exists(cond):
-            assert cond.shape == (video.shape[0], self.dim_cond)
+        # if exists(cond):
+        #     assert cond.shape == (video.shape[0], self.dim_cond)
 
-            cond = self.encoder_cond_in(cond)
-            cond_kwargs = dict(cond = cond)
+        #     cond = self.encoder_cond_in(cond)
+        #     cond_kwargs = dict(cond = cond)
 
         # initial conv
         # taking into account whether to encode first frame separately
 
-        if encode_first_frame_separately:
-            pad, first_frame, video = unpack(video, video_packed_shape, 'b c * h w')
-            first_frame = self.conv_in_first_frame(first_frame)
+        # if encode_first_frame_separately:
+        #     pad, first_frame, video = unpack(video, video_packed_shape, 'b c * h w')
+        #     first_frame = self.conv_in_first_frame(first_frame)
 
         video = self.conv_in(video)
+        print(f"MARINA video.shape 3 {video.shape}")
 
-        if encode_first_frame_separately:
-            video, _ = pack([first_frame, video], 'b c * h w')
-            video = pad_at_dim(video, (self.time_padding, 0), dim = 2)
+        # if encode_first_frame_separately:
+        #     video, _ = pack([first_frame, video], 'b c * h w')
+        #     video = pad_at_dim(video, (self.time_padding, 0), dim = 2)
 
         # encoder layers
 
-        for fn, has_cond in zip(self.encoder_layers, self.has_cond_across_layers):
+        # for fn, has_cond in zip(self.encoder_layers, self.has_cond_across_layers):
 
-            layer_kwargs = dict()
+        #     layer_kwargs = dict()
 
-            if has_cond:
-                layer_kwargs = cond_kwargs
+        #     if has_cond:
+        #         layer_kwargs = cond_kwargs
 
-            video = fn(video, **layer_kwargs)
+        #     video = fn(video, **layer_kwargs)
 
-        maybe_quantize = identity if not quantize else self.quantizers
+        # maybe_quantize = identity if not quantize else self.quantizers
 
-        return maybe_quantize(video)
+        return video
 
     @beartype
     def decode_from_code_indices(
@@ -1606,44 +1617,45 @@ class VideoTokenizer(Module):
 
         # conditioning, if needed
 
-        assert (not self.has_cond) or exists(cond), '`cond` must be passed into tokenizer forward method since conditionable layers were specified'
+        # assert (not self.has_cond) or exists(cond), '`cond` must be passed into tokenizer forward method since conditionable layers were specified'
 
-        if exists(cond):
-            assert cond.shape == (batch, self.dim_cond)
+        # if exists(cond):
+        #     assert cond.shape == (batch, self.dim_cond)
 
-            cond = self.decoder_cond_in(cond)
-            cond_kwargs = dict(cond = cond)
+        #     cond = self.decoder_cond_in(cond)
+        #     cond_kwargs = dict(cond = cond)
 
         # decoder layers
 
         x = quantized
 
-        for fn, has_cond in zip(self.decoder_layers, reversed(self.has_cond_across_layers)):
+        # for fn, has_cond in zip(self.decoder_layers, reversed(self.has_cond_across_layers)):
 
-            layer_kwargs = dict()
+        #     layer_kwargs = dict()
 
-            if has_cond:
-                layer_kwargs = cond_kwargs
+        #     if has_cond:
+        #         layer_kwargs = cond_kwargs
 
-            x = fn(x, **layer_kwargs)
+        #     x = fn(x, **layer_kwargs)
 
         # to pixels
 
         if decode_first_frame_separately:
-            left_pad, xff, x = x[:, :, :self.time_padding], x[:, :, self.time_padding], x[:, :, (self.time_padding + 1):]
+            pass
+            # left_pad, xff, x = x[:, :, :self.time_padding], x[:, :, self.time_padding], x[:, :, (self.time_padding + 1):]
 
-            out = self.conv_out(x)
-            outff = self.conv_out_first_frame(xff)
+            # out = self.conv_out(x)
+            # outff = self.conv_out_first_frame(xff)
 
-            video, _ = pack([outff, out], 'b c * h w')
+            # video, _ = pack([outff, out], 'b c * h w')
 
         else:
             video = self.conv_out(x)
 
             # if video were padded, remove padding
 
-            if video_contains_first_frame:
-                video = video[:, :, self.time_padding:]
+            # if video_contains_first_frame:
+            #     video = video[:, :, self.time_padding:]
 
         return video
 
@@ -1695,19 +1707,19 @@ class VideoTokenizer(Module):
 
         # lookup free quantization
 
-        if self.use_fsq:
-            quantized, codes = self.quantizers(x)
+        # if self.use_fsq:
+        #     quantized, codes = self.quantizers(x)
 
-            aux_losses = self.zero
-            quantizer_loss_breakdown = None
-        else:
-            aux_losses = self.zero
-            quantizer_loss_breakdown = None
-            pass
-            # (quantized, codes, aux_losses), quantizer_loss_breakdown = self.quantizers(x, return_loss_breakdown = True)
+        #     aux_losses = self.zero
+        #     quantizer_loss_breakdown = None
+        # else:
+        #     aux_losses = self.zero
+        #     quantizer_loss_breakdown = None
+        #     pass
+        #     # (quantized, codes, aux_losses), quantizer_loss_breakdown = self.quantizers(x, return_loss_breakdown = True)
 
-        if return_codes and not return_recon:
-            return codes
+        # if return_codes and not return_recon:
+        #     return codes
 
         # decoder
 
@@ -1730,168 +1742,180 @@ class VideoTokenizer(Module):
 
         # gan discriminator loss
 
-        if return_discr_loss:
-            assert self.has_gan
-            assert exists(self.discr)
+        # if return_discr_loss:
+        #     assert self.has_gan
+        #     assert exists(self.discr)
 
-            # pick a random frame for image discriminator
+        #     # pick a random frame for image discriminator
 
-            frame_indices = torch.randn((batch, frames)).topk(1, dim = -1).indices
+        #     frame_indices = torch.randn((batch, frames)).topk(1, dim = -1).indices
 
-            real = pick_video_frame(video, frame_indices)
+        #     real = pick_video_frame(video, frame_indices)
 
-            if apply_gradient_penalty:
-                real = real.requires_grad_()
+        #     if apply_gradient_penalty:
+        #         real = real.requires_grad_()
 
-            fake = pick_video_frame(recon_video, frame_indices)
+        #     fake = pick_video_frame(recon_video, frame_indices)
 
-            real_logits = self.discr(real)
-            fake_logits = self.discr(fake.detach())
+        #     real_logits = self.discr(real)
+        #     fake_logits = self.discr(fake.detach())
 
-            discr_loss = hinge_discr_loss(fake_logits, real_logits)
+        #     discr_loss = hinge_discr_loss(fake_logits, real_logits)
 
-            # multiscale discriminators
+        #     # multiscale discriminators
 
-            multiscale_discr_losses = []
+        #     multiscale_discr_losses = []
 
-            if self.has_multiscale_discrs:
-                for discr in self.multiscale_discrs:
-                    multiscale_real_logits = discr(video)
-                    multiscale_fake_logits = discr(recon_video.detach())
+        #     if self.has_multiscale_discrs:
+        #         for discr in self.multiscale_discrs:
+        #             multiscale_real_logits = discr(video)
+        #             multiscale_fake_logits = discr(recon_video.detach())
 
-                    multiscale_discr_loss = hinge_discr_loss(multiscale_fake_logits, multiscale_real_logits)
+        #             multiscale_discr_loss = hinge_discr_loss(multiscale_fake_logits, multiscale_real_logits)
 
-                    multiscale_discr_losses.append(multiscale_discr_loss)
-            else:
-                multiscale_discr_losses.append(self.zero)
+        #             multiscale_discr_losses.append(multiscale_discr_loss)
+        #     else:
+        #         multiscale_discr_losses.append(self.zero)
 
-            # gradient penalty
+        #     # gradient penalty
 
-            if apply_gradient_penalty:
-                gradient_penalty_loss = gradient_penalty(real, real_logits)
-            else:
-                gradient_penalty_loss = self.zero
+        #     if apply_gradient_penalty:
+        #         gradient_penalty_loss = gradient_penalty(real, real_logits)
+        #     else:
+        #         gradient_penalty_loss = self.zero
 
-            # total loss
+        #     # total loss
 
-            total_loss = discr_loss + \
-                gradient_penalty_loss * self.grad_penalty_loss_weight + \
-                sum(multiscale_discr_losses) * self.multiscale_adversarial_loss_weight
+        #     total_loss = discr_loss + \
+        #         gradient_penalty_loss * self.grad_penalty_loss_weight + \
+        #         sum(multiscale_discr_losses) * self.multiscale_adversarial_loss_weight
 
-            discr_loss_breakdown = DiscrLossBreakdown(
-                discr_loss,
-                multiscale_discr_losses,
-                gradient_penalty_loss
-            )
+        #     discr_loss_breakdown = DiscrLossBreakdown(
+        #         discr_loss,
+        #         multiscale_discr_losses,
+        #         gradient_penalty_loss
+        #     )
 
-            return total_loss, discr_loss_breakdown
+        #     return total_loss, discr_loss_breakdown
 
-        # perceptual loss
+        # # perceptual loss
 
-        if self.use_vgg:
+        # if self.use_vgg:
 
-            frame_indices = torch.randn((batch, frames)).topk(1, dim = -1).indices
+        #     frame_indices = torch.randn((batch, frames)).topk(1, dim = -1).indices
 
-            input_vgg_input = pick_video_frame(video, frame_indices)
-            recon_vgg_input = pick_video_frame(recon_video, frame_indices)
+        #     input_vgg_input = pick_video_frame(video, frame_indices)
+        #     recon_vgg_input = pick_video_frame(recon_video, frame_indices)
 
-            if channels == 1:
-                input_vgg_input = repeat(input_vgg_input, 'b 1 h w -> b c h w', c = 3)
-                recon_vgg_input = repeat(recon_vgg_input, 'b 1 h w -> b c h w', c = 3)
+        #     if channels == 1:
+        #         input_vgg_input = repeat(input_vgg_input, 'b 1 h w -> b c h w', c = 3)
+        #         recon_vgg_input = repeat(recon_vgg_input, 'b 1 h w -> b c h w', c = 3)
 
-            elif channels == 4:
-                input_vgg_input = input_vgg_input[:, :3]
-                recon_vgg_input = recon_vgg_input[:, :3]
+        #     elif channels == 4:
+        #         input_vgg_input = input_vgg_input[:, :3]
+        #         recon_vgg_input = recon_vgg_input[:, :3]
 
-            input_vgg_feats = self.vgg(input_vgg_input)
-            recon_vgg_feats = self.vgg(recon_vgg_input)
+        #     input_vgg_feats = self.vgg(input_vgg_input)
+        #     recon_vgg_feats = self.vgg(recon_vgg_input)
 
-            perceptual_loss = F.mse_loss(input_vgg_feats, recon_vgg_feats)
-        else:
-            perceptual_loss = self.zero
+        #     perceptual_loss = F.mse_loss(input_vgg_feats, recon_vgg_feats)
+        # else:
+        #     perceptual_loss = self.zero
 
-        # get gradient with respect to perceptual loss for last decoder layer
-        # needed for adaptive weighting
+        # # get gradient with respect to perceptual loss for last decoder layer
+        # # needed for adaptive weighting
 
-        last_dec_layer = self.conv_out.weight
+        # # last_dec_layer = self.conv_out.weight
 
-        norm_grad_wrt_perceptual_loss = None
+        # norm_grad_wrt_perceptual_loss = None
 
-        if self.training and self.use_vgg and (self.has_gan or self.has_multiscale_discrs):
-            norm_grad_wrt_perceptual_loss = grad_layer_wrt_loss(perceptual_loss, last_dec_layer).norm(p = 2)
+        # # if self.training and self.use_vgg and (self.has_gan or self.has_multiscale_discrs):
+        # #     norm_grad_wrt_perceptual_loss = grad_layer_wrt_loss(perceptual_loss, last_dec_layer).norm(p = 2)
 
-        # per-frame image discriminator
+        # # per-frame image discriminator
 
-        recon_video_frames = None
+        # recon_video_frames = None
 
-        if self.has_gan:
-            frame_indices = torch.randn((batch, frames)).topk(1, dim = -1).indices
-            recon_video_frames = pick_video_frame(recon_video, frame_indices)
+        # if self.has_gan:
+        #     pass
+        #     # frame_indices = torch.randn((batch, frames)).topk(1, dim = -1).indices
+        #     # recon_video_frames = pick_video_frame(recon_video, frame_indices)
 
-            fake_logits = self.discr(recon_video_frames)
-            gen_loss = hinge_gen_loss(fake_logits)
+        #     # fake_logits = self.discr(recon_video_frames)
+        #     # gen_loss = hinge_gen_loss(fake_logits)
 
-            adaptive_weight = 1.
+        #     # adaptive_weight = 1.
 
-            if exists(norm_grad_wrt_perceptual_loss):
-                norm_grad_wrt_gen_loss = grad_layer_wrt_loss(gen_loss, last_dec_layer).norm(p = 2)
-                adaptive_weight = norm_grad_wrt_perceptual_loss / norm_grad_wrt_gen_loss.clamp(min = 1e-3)
-                adaptive_weight.clamp_(max = 1e3)
+        #     # if exists(norm_grad_wrt_perceptual_loss):
+        #     #     norm_grad_wrt_gen_loss = grad_layer_wrt_loss(gen_loss, last_dec_layer).norm(p = 2)
+        #     #     adaptive_weight = norm_grad_wrt_perceptual_loss / norm_grad_wrt_gen_loss.clamp(min = 1e-3)
+        #     #     adaptive_weight.clamp_(max = 1e3)
 
-                if torch.isnan(adaptive_weight).any():
-                    adaptive_weight = 1.
-        else:
-            gen_loss = self.zero
-            adaptive_weight = 0.
+        #     #     if torch.isnan(adaptive_weight).any():
+        #     #         adaptive_weight = 1.
+        # else:
+        #     gen_loss = self.zero
+        #     adaptive_weight = 0.
 
-        # multiscale discriminator losses
+        # # multiscale discriminator losses
 
-        multiscale_gen_losses = []
-        multiscale_gen_adaptive_weights = []
+        # multiscale_gen_losses = []
+        # multiscale_gen_adaptive_weights = []
 
-        if self.has_multiscale_gan and self.has_multiscale_discrs:
-            if not exists(recon_video_frames):
-                recon_video_frames = pick_video_frame(recon_video, frame_indices)
+        # if self.has_multiscale_gan and self.has_multiscale_discrs:
+        #     if not exists(recon_video_frames):
+        #         recon_video_frames = pick_video_frame(recon_video, frame_indices)
 
-            for discr in self.multiscale_discrs:
-                fake_logits = recon_video_frames
-                multiscale_gen_loss = hinge_gen_loss(fake_logits)
+        #     for discr in self.multiscale_discrs:
+        #         fake_logits = recon_video_frames
+        #         multiscale_gen_loss = hinge_gen_loss(fake_logits)
 
-                multiscale_gen_losses.append(multiscale_gen_loss)
+        #         multiscale_gen_losses.append(multiscale_gen_loss)
 
-                multiscale_adaptive_weight = 1.
+        #         multiscale_adaptive_weight = 1.
 
-                if exists(norm_grad_wrt_perceptual_loss):
-                    norm_grad_wrt_gen_loss = grad_layer_wrt_loss(multiscale_gen_loss, last_dec_layer).norm(p = 2)
-                    multiscale_adaptive_weight = norm_grad_wrt_perceptual_loss / norm_grad_wrt_gen_loss.clamp(min = 1e-5)
-                    multiscale_adaptive_weight.clamp_(max = 1e3)
+        #         if exists(norm_grad_wrt_perceptual_loss):
+        #             norm_grad_wrt_gen_loss = grad_layer_wrt_loss(multiscale_gen_loss, last_dec_layer).norm(p = 2)
+        #             multiscale_adaptive_weight = norm_grad_wrt_perceptual_loss / norm_grad_wrt_gen_loss.clamp(min = 1e-5)
+        #             multiscale_adaptive_weight.clamp_(max = 1e3)
 
-                multiscale_gen_adaptive_weights.append(multiscale_adaptive_weight)
+        #         multiscale_gen_adaptive_weights.append(multiscale_adaptive_weight)
 
         # calculate total loss
 
-        total_loss = recon_loss \
-            + aux_losses * self.quantizer_aux_loss_weight \
-            + perceptual_loss * self.perceptual_loss_weight \
-            + gen_loss * adaptive_weight * adversarial_loss_weight
+        total_loss = recon_loss
+            # + aux_losses * self.quantizer_aux_loss_weight \
+            # + perceptual_loss * self.perceptual_loss_weight \
+            # + gen_loss * adaptive_weight * adversarial_loss_weight
 
-        if self.has_multiscale_discrs:
+        # if self.has_multiscale_discrs:
 
-            weighted_multiscale_gen_losses = sum(loss * weight for loss, weight in zip(multiscale_gen_losses, multiscale_gen_adaptive_weights))
+        #     weighted_multiscale_gen_losses = sum(loss * weight for loss, weight in zip(multiscale_gen_losses, multiscale_gen_adaptive_weights))
 
-            total_loss = total_loss + weighted_multiscale_gen_losses * multiscale_adversarial_loss_weight
+        #     total_loss = total_loss + weighted_multiscale_gen_losses * multiscale_adversarial_loss_weight
 
         # loss breakdown
 
+        # loss_breakdown = LossBreakdown(
+        #     recon_loss,
+        #     aux_losses,
+        #     quantizer_loss_breakdown,
+        #     perceptual_loss,
+        #     gen_loss,
+        #     adaptive_weight,
+        #     multiscale_gen_losses,
+        #     multiscale_gen_adaptive_weights
+        # )
+
         loss_breakdown = LossBreakdown(
             recon_loss,
-            aux_losses,
-            quantizer_loss_breakdown,
-            perceptual_loss,
-            gen_loss,
-            adaptive_weight,
-            multiscale_gen_losses,
-            multiscale_gen_adaptive_weights
+            torch.tensor([0.0]),
+            torch.tensor([0.0]),
+            torch.tensor([0.0]),
+            torch.tensor([0.0]),
+            torch.tensor([0.0]),
+            torch.tensor([0.0]),
+            torch.tensor([0.0])
         )
 
         return total_loss, loss_breakdown
