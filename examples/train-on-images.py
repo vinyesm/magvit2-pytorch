@@ -31,8 +31,8 @@ transform = transforms.Compose([
 
 
 
-batch_size = 32
-num_workers = 4
+batch_size = 1024
+num_workers = 1
 train_ds = wds.WebDataset(train_dataset_paths).decode("pilrgb").rename(image="jpg;png;jpeg;webp").map_dict(image=transform).to_tuple("image").shuffle(800)
 train_dl = wds.WebLoader(train_ds, batch_size=batch_size, num_workers=num_workers)
 
@@ -77,9 +77,9 @@ trainer = VideoTokenizerTrainer(
     batch_size = batch_size,
     discr_start_after_step = 100,
     grad_accum_every = 1,
-    learning_rate = 1e-4,
+    learning_rate = 1e-3,
     num_train_steps = 1_000_000
 )
 
-with trainer.trackers(project_name = 'magvit2', run_name = 'baseline'):
-    trainer.train()
+# with trainer.trackers(project_name = 'magvit2', run_name = 'baseline'):
+trainer.train()

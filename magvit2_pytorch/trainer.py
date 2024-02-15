@@ -28,7 +28,7 @@ from accelerate.utils import DistributedDataParallelKwargs
 
 from einops import rearrange
 
-from ema_pytorch import EMA
+#from ema_pytorch import EMA
 
 from pytorch_custom_utils import auto_unwrap_model
 
@@ -47,6 +47,8 @@ DEFAULT_DDP_KWARGS = DistributedDataParallelKwargs(
 
 # helpers
 
+
+
 def exists(v):
     return v is not None
 
@@ -56,7 +58,7 @@ def cycle(dl):
             yield data
 # class
 
-@auto_unwrap_model()
+
 class VideoTokenizerTrainer:
     # @beartype
     def __init__(
@@ -91,30 +93,31 @@ class VideoTokenizerTrainer:
         optimizer_kwargs: dict = dict(),
         dataset_kwargs: dict = dict()
     ):
-        self.use_wandb_tracking = use_wandb_tracking
+        # self.use_wandb_tracking = use_wandb_tracking
 
-        if use_wandb_tracking:
-            accelerate_kwargs['log_with'] = 'wandb'
+        # if use_wandb_tracking:
+        #     accelerate_kwargs['log_with'] = 'wandb'
 
-        if 'kwargs_handlers' not in accelerate_kwargs:
-            accelerate_kwargs['kwargs_handlers'] = [DEFAULT_DDP_KWARGS]
+        # if 'kwargs_handlers' not in accelerate_kwargs:
+        #     accelerate_kwargs['kwargs_handlers'] = [DEFAULT_DDP_KWARGS]
 
-        # instantiate accelerator
+        # # instantiate accelerator
 
-        self.accelerator = Accelerator(**accelerate_kwargs)
+        # self.accelerator = Accelerator(**accelerate_kwargs)
 
         # model and exponentially moving averaged model
 
         self.model = model
 
-        if self.is_main:
-            self.ema_model = EMA(
-                model,
-                include_online_model = False,
-                **ema_kwargs
-            )
+        # if self.is_main:
+        #     self.ema_model = EMA(
+        #         model,
+        #         include_online_model = False,
+        #         **ema_kwargs
+        #     )
+        # self.ema_model = model
 
-        dataset_kwargs.update(channels = model.channels)
+        # dataset_kwargs.update(channels = model.channels)
 
         # dataset
 
@@ -153,27 +156,27 @@ class VideoTokenizerTrainer:
         self.dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader
 
-        self.validate_every_step = validate_every_step
-        self.checkpoint_every_step = checkpoint_every_step
+        # self.validate_every_step = validate_every_step
+        # self.checkpoint_every_step = checkpoint_every_step
 
         # optimizers
 
         self.optimizer = get_optimizer(model.parameters(), lr = learning_rate, **optimizer_kwargs)
-        self.discr_optimizer = get_optimizer(model.discr_parameters(), lr = learning_rate, **optimizer_kwargs)
+        # self.discr_optimizer = get_optimizer(model.discr_parameters(), lr = learning_rate, **optimizer_kwargs)
 
         # warmup
 
-        self.warmup = warmup.LinearWarmup(self.optimizer, warmup_period = warmup_steps)
-        self.discr_warmup = warmup.LinearWarmup(self.discr_optimizer, warmup_period = warmup_steps)
+        # self.warmup = warmup.LinearWarmup(self.optimizer, warmup_period = warmup_steps)
+        # self.discr_warmup = warmup.LinearWarmup(self.discr_optimizer, warmup_period = warmup_steps)
 
         # schedulers
 
-        if exists(scheduler):
-            self.scheduler = scheduler(self.optimizer, **scheduler_kwargs)
-            self.discr_scheduler = scheduler(self.discr_optimizer, **scheduler_kwargs)
-        else:
-            self.scheduler = ConstantLRScheduler(self.optimizer)
-            self.discr_scheduler = ConstantLRScheduler(self.discr_optimizer)
+        # if exists(scheduler):
+        #     self.scheduler = scheduler(self.optimizer, **scheduler_kwargs)
+        #     self.discr_scheduler = scheduler(self.discr_optimizer, **scheduler_kwargs)
+        # else:
+        #     self.scheduler = ConstantLRScheduler(self.optimizer)
+        #     self.discr_scheduler = ConstantLRScheduler(self.discr_optimizer)
 
         # training related params
 
@@ -181,54 +184,54 @@ class VideoTokenizerTrainer:
 
         self.num_train_steps = num_train_steps
         self.grad_accum_every = grad_accum_every
-        self.max_grad_norm = max_grad_norm
+        # self.max_grad_norm = max_grad_norm
 
-        self.apply_gradient_penalty_every = apply_gradient_penalty_every
+        # self.apply_gradient_penalty_every = apply_gradient_penalty_every
 
         # prepare for maybe distributed
 
-        (
-            self.model,
-            self.dataloader,
-            self.optimizer,
-            self.discr_optimizer
-        ) = self.accelerator.prepare(
-            self.model,
-            self.dataloader,
-            self.optimizer,
-            self.discr_optimizer
-        )
+        # (
+        #     self.model,
+        #     self.dataloader,
+        #     self.optimizer,
+        #     self.discr_optimizer
+        # ) = self.accelerator.prepare(
+        #     self.model,
+        #     self.dataloader,
+        #     self.optimizer,
+        #     self.discr_optimizer
+        # )
 
         # only use adversarial training after a certain number of steps
 
-        self.discr_start_after_step = discr_start_after_step
+        # self.discr_start_after_step = discr_start_after_step
 
         # multiscale discr losses
 
-        self.has_multiscale_discrs = self.model.has_multiscale_discrs
-        self.multiscale_discr_optimizers = []
+        # self.has_multiscale_discrs = self.model.has_multiscale_discrs
+        # self.multiscale_discr_optimizers = []
 
-        for ind, discr in enumerate(self.model.multiscale_discrs):
-            multiscale_optimizer = get_optimizer(discr.parameters(), lr = learning_rate, **optimizer_kwargs)
+        # for ind, discr in enumerate(self.model.multiscale_discrs):
+        #     multiscale_optimizer = get_optimizer(discr.parameters(), lr = learning_rate, **optimizer_kwargs)
 
-            self.multiscale_discr_optimizers.append(multiscale_optimizer)
+        #     self.multiscale_discr_optimizers.append(multiscale_optimizer)
 
-        if self.has_multiscale_discrs:
-            self.multiscale_discr_optimizers = self.accelerator.prepare(*self.multiscale_discr_optimizers)
+        # if self.has_multiscale_discrs:
+        #     self.multiscale_discr_optimizers = self.accelerator.prepare(*self.multiscale_discr_optimizers)
 
         # checkpoints and sampled results folder
 
-        checkpoints_folder = Path(checkpoints_folder)
-        results_folder = Path(results_folder)
+        # checkpoints_folder = Path(checkpoints_folder)
+        # results_folder = Path(results_folder)
 
-        checkpoints_folder.mkdir(parents = True, exist_ok = True)
-        results_folder.mkdir(parents = True, exist_ok = True)
+        # checkpoints_folder.mkdir(parents = True, exist_ok = True)
+        # results_folder.mkdir(parents = True, exist_ok = True)
 
-        assert checkpoints_folder.is_dir()
-        assert results_folder.is_dir()
+        # assert checkpoints_folder.is_dir()
+        # assert results_folder.is_dir()
 
-        self.checkpoints_folder = checkpoints_folder
-        self.results_folder = results_folder
+        # self.checkpoints_folder = checkpoints_folder
+        # self.results_folder = results_folder
 
         # keep track of train step
 
@@ -236,7 +239,7 @@ class VideoTokenizerTrainer:
 
         # move ema to the proper device
 
-        self.ema_model.to(self.device)
+        # self.ema_model.to(self.device)
 
     @contextmanager
     @beartype
@@ -257,7 +260,8 @@ class VideoTokenizerTrainer:
         self.accelerator.end_training()
 
     def log(self, **data_kwargs):
-        self.accelerator.log(data_kwargs, step = self.step)
+        # self.accelerator.log(data_kwargs, step = self.step)
+        print(data_kwargs)
 
     @property
     def device(self):
@@ -275,11 +279,11 @@ class VideoTokenizerTrainer:
         return self.accelerator.wait_for_everyone()
 
     def print(self, msg):
-        return self.accelerator.print(msg)
+        return print(msg)
 
     @property
     def ema_tokenizer(self):
-        return self.ema_model.ema_model
+        return self.ema_model
 
     def tokenize(self, *args, **kwargs):
         return self.ema_tokenizer.tokenize(*args, **kwargs)
@@ -332,33 +336,35 @@ class VideoTokenizerTrainer:
 
         # determine whether to train adversarially
 
-        train_adversarially = self.model.use_gan and (step + 1) > self.discr_start_after_step
+        # train_adversarially = self.model.use_gan and (step + 1) > self.discr_start_after_step
 
-        adversarial_loss_weight = 0. if not train_adversarially else None
-        multiscale_adversarial_loss_weight = 0. if not train_adversarially else None
+        # adversarial_loss_weight = 0. if not train_adversarially else None
+        # multiscale_adversarial_loss_weight = 0. if not train_adversarially else None
 
         # main model
 
+
+        # for grad_accum_step in range(self.grad_accum_every):
+
+        #     is_last = grad_accum_step == (self.grad_accum_every - 1)
+        #     context = partial(self.accelerator.no_sync, self.model) if not is_last else nullcontext
+
+        data, *_ = next(dl_iter)
+
+        data = data.to(self.device)
+
+        # with self.accelerator.autocast(), context():
+        loss, loss_breakdown = self.model(
+            data,
+            return_loss = True,
+            adversarial_loss_weight = 0,
+            multiscale_adversarial_loss_weight = 0
+        )
+
         self.optimizer.zero_grad()
+        loss.backward()
 
-        for grad_accum_step in range(self.grad_accum_every):
 
-            is_last = grad_accum_step == (self.grad_accum_every - 1)
-            context = partial(self.accelerator.no_sync, self.model) if not is_last else nullcontext
-
-            data, *_ = next(dl_iter)
-
-            data = data.to(self.device)
-
-            with self.accelerator.autocast(), context():
-                loss, loss_breakdown = self.model(
-                    data,
-                    return_loss = True,
-                    adversarial_loss_weight = adversarial_loss_weight,
-                    multiscale_adversarial_loss_weight = multiscale_adversarial_loss_weight
-                )
-
-                self.accelerator.backward(loss / self.grad_accum_every)
 
         self.log(
             total_loss = loss.item(),
@@ -369,29 +375,31 @@ class VideoTokenizerTrainer:
 
         self.print(f'recon loss: {loss_breakdown.recon_loss.item():.3f}')
 
-        if exists(self.max_grad_norm):
-            self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+        # if exists(self.max_grad_norm):
+        #     self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
 
         self.optimizer.step()
 
-        if not self.accelerator.optimizer_step_was_skipped:
-            with self.warmup.dampening():
-                self.scheduler.step()
+        # if not self.accelerator.optimizer_step_was_skipped:
+        #     with self.warmup.dampening():
+        #         self.scheduler.step()
 
         # update ema model
 
-        self.wait()
+        # self.wait()
 
-        if self.is_main:
-            self.ema_model.update()
+        # if self.is_main:
+        #     self.ema_model.update()
 
-        self.wait()
+        # self.wait()
 
         # if adversarial loss is turned off, continue
 
-        if not train_adversarially:
-            self.step += 1
-            return
+        # if not train_adversarially:
+        #     self.step += 1
+        #     return
+        self.step += 1
+        return
 
         # discriminator and multiscale discriminators
 
@@ -521,18 +529,18 @@ class VideoTokenizerTrainer:
 
             self.train_step(dl_iter)
 
-            self.wait()
+            # self.wait()
 
-            if self.is_main and not (step % self.validate_every_step):
-                self.valid_step(valid_dl_iter)
+            # if self.is_main and not (step % self.validate_every_step):
+            #     self.valid_step(valid_dl_iter)
 
-            self.wait()
+            # self.wait()
 
-            if self.is_main and not (step % self.checkpoint_every_step):
-                checkpoint_num = step // self.checkpoint_every_step
-                checkpoint_path = self.checkpoints_folder / f'checkpoint.{checkpoint_num}.pt'
-                self.save(str(checkpoint_path))
+            # if self.is_main and not (step % self.checkpoint_every_step):
+            #     checkpoint_num = step // self.checkpoint_every_step
+            #     checkpoint_path = self.checkpoints_folder / f'checkpoint.{checkpoint_num}.pt'
+            #     self.save(str(checkpoint_path))
 
-            self.wait()
+            # self.wait()
 
             step += 1

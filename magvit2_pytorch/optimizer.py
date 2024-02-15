@@ -1,4 +1,5 @@
 from torch.optim import AdamW, Adam
+import torch
 
 def separate_weight_decayable_params(params):
     wd_params, no_wd_params = [], []
@@ -21,6 +22,10 @@ def get_optimizer(
 ):
     if filter_by_requires_grad:
         params = [t for t in params if t.requires_grad]
+
+    return torch.optim.Adam(params,
+                             lr = 1e-3,
+                             weight_decay = 1e-8)
 
     opt_kwargs = dict(lr = lr, betas = betas, eps = eps)
 

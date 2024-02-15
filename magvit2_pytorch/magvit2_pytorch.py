@@ -1040,6 +1040,14 @@ DiscrLossBreakdown = namedtuple('DiscrLossBreakdown', [
     'gradient_penalty'
 ])
 
+class Reshape(nn.Module):
+  def __init__(self, *args):
+    super().__init__()
+    self.shape = args
+
+  def forward(self, x):
+    return x.view(self.shape)
+
 class VideoTokenizer(Module):
     @beartype
     def __init__(
@@ -1104,8 +1112,8 @@ class VideoTokenizer(Module):
 
         # self.conv_in = CausalConv3d(channels, init_dim, input_conv_kernel_size, pad_mode = pad_mode)
         # self.conv_in = nn.Identity()
-        self.conv_in = nn.Linear(32, 32)
-        nn.init.xavier_uniform_(self.conv_in.weight)
+        self.conv_in = torch.nn.Sequential(Reshape(-1, 3, 1, 32*32), torch.nn.Linear(32*32, 32*32), Reshape(-1, 3, 1, 32, 32))
+        # nn.init.xavier_uniform_(self.conv_in.weight)
         # self.conv_in.weight.data.copy_(torch.eye(32))
 
         # whether to encode the first frame separately or not
@@ -1563,8 +1571,10 @@ class VideoTokenizer(Module):
         #     pad, first_frame, video = unpack(video, video_packed_shape, 'b c * h w')
         #     first_frame = self.conv_in_first_frame(first_frame)
 
+
+        print(f"MARINA video.shape before {video.shape}")
         video = self.conv_in(video)
-        print(f"MARINA video.shape 3 {video.shape}")
+        print(f"MARINA video.shape after {video.shape}")
 
         # if encode_first_frame_separately:
         #     video, _ = pack([first_frame, video], 'b c * h w')
@@ -1733,6 +1743,10 @@ class VideoTokenizer(Module):
         if not (return_loss or return_discr_loss or return_recon_loss_only):
             return recon_video
 
+        # print(f"video {video.shape}")
+        # print(f"video {video}")
+        # print(f"recon_video {recon_video.shape}")
+        # print(f"recon_video {recon_video}")
         recon_loss = F.mse_loss(video, recon_video)
 
         # for validation, only return recon loss
