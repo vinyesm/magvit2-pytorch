@@ -9,7 +9,6 @@ from random import random
 
 # 1. Dataloader
 
-# dataset_folder = "images.tar.gz"
 train_dataset_paths = "toy-data/shard{1..7}.tar.gz::toy-data/shard{1..7}.tar.gz"
 valid_dataset_paths = "toy-data/shard{8..9}.tar.gz"
 
@@ -78,8 +77,12 @@ trainer = VideoTokenizerTrainer(
     discr_start_after_step = 100,
     grad_accum_every = 1,
     learning_rate = 1e-3,
-    num_train_steps = 1_000_000
+    num_train_steps = 1_000_000,
+    validate_every_step = 17,
 )
 
 # with trainer.trackers(project_name = 'magvit2', run_name = 'baseline'):
+import wandb
+
+wandb.init(project="magvit2")
 trainer.train()

@@ -8,6 +8,7 @@ from torch.nn import Module
 from torch.utils.data import Dataset, random_split
 from torch.optim.lr_scheduler import LambdaLR, LRScheduler
 import pytorch_warmup as warmup
+import wandb
 
 from beartype import beartype
 from beartype.typing import Optional, Literal, Union, Type
@@ -46,7 +47,6 @@ DEFAULT_DDP_KWARGS = DistributedDataParallelKwargs(
 )
 
 # helpers
-
 
 
 def exists(v):
@@ -93,7 +93,7 @@ class VideoTokenizerTrainer:
         optimizer_kwargs: dict = dict(),
         dataset_kwargs: dict = dict()
     ):
-        # self.use_wandb_tracking = use_wandb_tracking
+        self.use_wandb_tracking = use_wandb_tracking
 
         # if use_wandb_tracking:
         #     accelerate_kwargs['log_with'] = 'wandb'
@@ -156,7 +156,7 @@ class VideoTokenizerTrainer:
         self.dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader
 
-        # self.validate_every_step = validate_every_step
+        self.validate_every_step = validate_every_step
         # self.checkpoint_every_step = checkpoint_every_step
 
         # optimizers
@@ -222,16 +222,16 @@ class VideoTokenizerTrainer:
         # checkpoints and sampled results folder
 
         # checkpoints_folder = Path(checkpoints_folder)
-        # results_folder = Path(results_folder)
+        results_folder = Path(results_folder)
 
         # checkpoints_folder.mkdir(parents = True, exist_ok = True)
-        # results_folder.mkdir(parents = True, exist_ok = True)
+        results_folder.mkdir(parents = True, exist_ok = True)
 
         # assert checkpoints_folder.is_dir()
-        # assert results_folder.is_dir()
+        assert results_folder.is_dir()
 
         # self.checkpoints_folder = checkpoints_folder
-        # self.results_folder = results_folder
+        self.results_folder = results_folder
 
         # keep track of train step
 
@@ -262,6 +262,12 @@ class VideoTokenizerTrainer:
     def log(self, **data_kwargs):
         # self.accelerator.log(data_kwargs, step = self.step)
         print(data_kwargs)
+        wandb.log(data_kwargs)
+
+    def log_gif(self, gif):
+        # self.accelerator.log(data_kwargs, step = self.step)
+        images = wandb.Video(gif, caption="Left: original, Right: decoded")
+        wandb.log({"examples": images}) 
 
     @property
     def device(self):
@@ -269,7 +275,8 @@ class VideoTokenizerTrainer:
 
     @property
     def is_main(self):
-        return self.accelerator.is_main_process
+        # return self.accelerator.is_main_process
+        return True
 
     @property
     def is_local_main(self):
@@ -464,7 +471,7 @@ class VideoTokenizerTrainer:
         save_recons = True,
         num_save_recons = 1
     ):
-        self.ema_model.eval()
+        self.model.eval()
 
         recon_loss = 0.
         ema_recon_loss = 0.
@@ -476,9 +483,9 @@ class VideoTokenizerTrainer:
             valid_video, = next(dl_iter)
             valid_video = valid_video.to(self.device)
 
-            with self.accelerator.autocast():
-                loss, _ = self.model(valid_video, return_recon_loss_only = True)
-                ema_loss, ema_recon_video = self.ema_model(valid_video, return_recon_loss_only = True)
+            # with self.accelerator.autocast():
+            loss, _ = self.model(valid_video, return_recon_loss_only = True)
+            ema_loss, ema_recon_video = self.model(valid_video, return_recon_loss_only = True)
 
             recon_loss += loss / self.grad_accum_every
             ema_recon_loss += ema_loss / self.grad_accum_every
@@ -514,8 +521,8 @@ class VideoTokenizerTrainer:
         sample_path = str(self.results_folder / f'sampled.{validate_step}.gif')
 
         video_tensor_to_gif(real_and_recon, str(sample_path))
-
         self.print(f'sample saved to {str(sample_path)}')
+        self.log_gif(str(sample_path))
 
     def train(self):
 
@@ -531,8 +538,8 @@ class VideoTokenizerTrainer:
 
             # self.wait()
 
-            # if self.is_main and not (step % self.validate_every_step):
-            #     self.valid_step(valid_dl_iter)
+            if self.is_main and not (step % self.validate_every_step):
+                self.valid_step(valid_dl_iter)
 
             # self.wait()
 
