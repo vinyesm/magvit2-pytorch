@@ -32,13 +32,13 @@ valid_dataset_paths = "phys101_frames.tar"
 # ])
 
 transform = transforms.Compose([
-    transforms.Resize(32),
-    transforms.CenterCrop(32),
+    transforms.Resize(64),
+    transforms.CenterCrop(64),
     transforms.ToTensor()
 ])
 
-# TODO: handle batch size > 1
-batch_size = 1
+
+batch_size = 8
 num_workers = 64
 
 def apply_transform(image):
@@ -54,21 +54,24 @@ def apply_transform(image):
     return transformed_image
 
 def assemble_frames(sample):
-    #print(sample.keys())
-    #print(sample["__key__"])
+    # print(sample.keys())
+    # print(sample["__key__"])
     frames = [x for x in sample.keys() if x.split('.')[-1] == "jpeg"]
     # TODO add padding and handle it in trainer (now all tensors need same size)
-    # this is a workaround for 
-    # RuntimeError: stack expects each tensor to be equal size, but got [71, 3, 32, 32] at entry 0 and [89, 3, 32, 32] at entry 1
-    frames = frames[:5]
-    images = np.array([apply_transform(sample[frame]) for frame in frames])
-    return images
+    if frames:
+        # print(f"nb frames: {len(frames)}")
+        frames = frames[:5]
+        images = np.array([apply_transform(sample[frame]) for frame in frames])
+        images_transposed = np.transpose(images, (1, 0, 2, 3))
+        return images_transposed
+    else:
+        return None
 
-train_ds = wds.WebDataset(train_dataset_paths).decode("rgb").map(assemble_frames).shuffle(100)
+train_ds = wds.WebDataset(train_dataset_paths).shuffle(10000).decode("rgb").map(assemble_frames)
 train_dl = wds.WebLoader(train_ds, batch_size=batch_size, num_workers=num_workers)
 
-valid_ds = wds.WebDataset(valid_dataset_paths).decode("rgb").map(assemble_frames).shuffle(100)
-valid_dl = wds.WebLoader(valid_ds, batch_size=batch_size, num_workers=num_workers)
+valid_ds = wds.WebDataset(valid_dataset_paths).shuffle(10000).decode("rgb").map(assemble_frames)
+valid_dl = wds.WebLoader(valid_ds, batch_size=1, num_workers=num_workers)
 
 for images in train_ds:
     break
@@ -85,7 +88,7 @@ from magvit2_pytorch import (
 )
 
 tokenizer = VideoTokenizer(
-    image_size = 32,
+    image_size = 64,
     init_dim = 16,
     max_dim = 32,
     codebook_size = 1024, # 1024

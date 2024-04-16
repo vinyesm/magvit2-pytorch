@@ -361,6 +361,10 @@ class VideoTokenizerTrainer:
         #     context = partial(self.accelerator.no_sync, self.model) if not is_last else nullcontext
 
         data, *_ = next(dl_iter)
+        # whole batch
+        data = next(dl_iter)
+
+        print(f"training sample: {data.shape}")
 
         data = data.to(self.device)
 
@@ -484,7 +488,8 @@ class VideoTokenizerTrainer:
         recon_videos = []
 
         for _ in range(self.grad_accum_every):
-            valid_video, = next(dl_iter)
+            valid_video = next(dl_iter)
+            print(f"valid_video {valid_video.shape}")
             valid_video = valid_video.to(self.device)
 
             # with self.accelerator.autocast():
