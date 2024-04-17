@@ -919,11 +919,11 @@ class CausalConv3d(Module):
         self.conv = nn.Conv3d(chan_in, chan_out, kernel_size, stride = stride, dilation = dilation, **kwargs)
 
     def forward(self, x):
-        print(f"CausalConv3d:forward x.shape {x.shape}")
+        # print(f"CausalConv3d:forward x.shape {x.shape}")
         pad_mode = self.pad_mode if self.time_pad < x.shape[2] else 'constant'
 
         x = F.pad(x, self.time_causal_padding, mode = pad_mode)
-        print(f"CausalConv3d:forward x.shape {x.shape}")
+        # print(f"CausalConv3d:forward x.shape {x.shape}")
         return self.conv(x)
 
 @beartype

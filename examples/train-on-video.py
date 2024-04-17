@@ -15,21 +15,6 @@ from PIL import Image
 train_dataset_paths = "phys101_frames.tar"
 valid_dataset_paths = "phys101_frames.tar"
 
-# class RandomApply(nn.Module):
-#     def __init__(self, prob, fn, fn_else = lambda x: x):
-#         super().__init__()
-#         self.fn = fn
-#         self.fn_else = fn_else
-#         self.prob = prob
-#     def forward(self, x):
-#         fn = self.fn if random() < self.prob else self.fn_else
-#         return fn(x)
-
-# transform = transforms.Compose([
-#     transforms.Resize(32),
-#     RandomApply(0.1, transforms.RandomResizedCrop(32, scale=(0.5, 1.0), ratio=(0.98, 1.02)), transforms.CenterCrop(32)),
-#     transforms.ToTensor()
-# ])
 
 transform = transforms.Compose([
     transforms.Resize(64),
@@ -37,40 +22,29 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-
 batch_size = 8
 num_workers = 64
 
-def apply_transform(image):
-    # Convert the data type to uint8 if it's float32
-    if image.dtype == np.float32:
-        image = (image * 255).astype(np.uint8)
-    # Reshape the array if necessary (remove singleton dimensions)
-    if image.shape[-1] == 1:
-        image = np.squeeze(image, axis=-1)
-    pil_image = Image.fromarray(image)
-    # Apply transformation here
-    transformed_image = transform(pil_image)
-    return transformed_image
 
 def assemble_frames(sample):
     # print(sample.keys())
-    # print(sample["__key__"])
+    print(sample["__key__"])
     frames = [x for x in sample.keys() if x.split('.')[-1] == "jpeg"]
     # TODO add padding and handle it in trainer (now all tensors need same size)
     if frames:
         # print(f"nb frames: {len(frames)}")
-        frames = frames[:5]
-        images = np.array([apply_transform(sample[frame]) for frame in frames])
+        frames = [sample[frame] for frame in frames[:10]]
+        # [print(frame.size) for frame in frames] 
+        images = np.array([transform(frame) for frame in frames])
         images_transposed = np.transpose(images, (1, 0, 2, 3))
         return images_transposed
     else:
         return None
 
-train_ds = wds.WebDataset(train_dataset_paths).shuffle(10000).decode("rgb").map(assemble_frames)
+train_ds = wds.WebDataset(train_dataset_paths).shuffle(10000).decode("pil").map(assemble_frames)
 train_dl = wds.WebLoader(train_ds, batch_size=batch_size, num_workers=num_workers)
 
-valid_ds = wds.WebDataset(valid_dataset_paths).shuffle(10000).decode("rgb").map(assemble_frames)
+valid_ds = wds.WebDataset(valid_dataset_paths).shuffle(10000).decode("pil").map(assemble_frames)
 valid_dl = wds.WebLoader(valid_ds, batch_size=1, num_workers=num_workers)
 
 for images in train_ds:
@@ -126,7 +100,14 @@ trainer = VideoTokenizerTrainer(
 # with trainer.trackers(project_name = 'magvit2', run_name = 'baseline'):
 import wandb
 
-wandb.init(project="magvit2-video")
+wandb.init(project="magvit2-video", save_code=True)
 trainer.train()
+
+# training pil decoding, 10-frame: done -> cosmic-yogurt-30
+# TODO: rgb decoding vs pil
+# TODO: torchrgb vs pil vs rgb
+# TODO: handle videos of different lengths
+# TODO: handle non-square videos
+# TODO: add adversarial and perceptual loss
 
 

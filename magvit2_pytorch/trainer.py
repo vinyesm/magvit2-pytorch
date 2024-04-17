@@ -489,7 +489,7 @@ class VideoTokenizerTrainer:
 
         for _ in range(self.grad_accum_every):
             valid_video = next(dl_iter)
-            print(f"valid_video {valid_video.shape}")
+            # print(f"valid_video {valid_video.shape}")
             valid_video = valid_video.to(self.device)
 
             # with self.accelerator.autocast():
